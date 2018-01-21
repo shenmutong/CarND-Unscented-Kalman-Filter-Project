@@ -131,6 +131,13 @@ public:
    */
   void PredictRadarMeasurement(VectorXd raw_measurements,const MatrixXd & z_sig);
   void PredictLaserMeasurement(VectorXd raw_measurements,const MatrixXd & z_sig);
+  /*
+   *claculate INS
+   */
+  double CalculateNIS(MatrixXd z_diff,MatrixXd S);
+    /*
+     *Common Update kalman filter for both laser and radar
+     */
   void UpdateCommon(MatrixXd Zsig, VectorXd raw_measurements);
 };
 

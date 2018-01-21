@@ -14,9 +14,11 @@ using std::vector;
 UKF::UKF() {
   // if this is false, laser measurements will be ignored (except during init)
   use_laser_ = true;
+  //use_laser_ = false;
 
   // if this is false, radar measurements will be ignored (except during init)
   use_radar_ = true;
+  //use_radar_ = false;
 
   // initial state vector
   x_ = VectorXd(5);
@@ -25,12 +27,12 @@ UKF::UKF() {
   P_ = MatrixXd(5, 5);
 
   // Process noise standard deviation longitudinal acceleration in m/s^2
-  std_a_ = 30;
-  //std_a_ = 0.2;
+  //std_a_ = 30;
+  std_a_ = 0.5;
 
   // Process noise standard deviation yaw acceleration in rad/s^2
-  std_yawdd_ = 30;
-  //std_yawdd_ = 0.2;
+  //std_yawdd_ = 30;
+  std_yawdd_ = 0.5;
   
   //DO NOT MODIFY measurement noise values below these are provided by the sensor manufacturer.
   // Laser measurement noise standard deviation position1 in m
@@ -68,11 +70,17 @@ UKF::UKF() {
   //sigma points weights
   weights_ = VectorXd(2 * n_aug_+1);
   //initialize P 
-  P_ <<     0.0043,   -0.0013,    0.0030,   -0.0022,   -0.0020,
-    -0.0013,    0.0077,    0.0011,    0.0071,    0.0060,
-    0.0030,    0.0011,    0.0054,    0.0007,    0.0008,
-    -0.0022,    0.0071,    0.0007,    0.0098,    0.0100,
-    -0.0020,    0.0060,    0.0008,    0.0100,    0.0123;
+  //P_ <<     0.0043,   -0.0013,    0.0030,   -0.0022,   -0.0020,
+  //  -0.0013,    0.0077,    0.0011,    0.0071,    0.0060,
+  //  0.0030,    0.0011,    0.0054,    0.0007,    0.0008,
+  //  -0.0022,    0.0071,    0.0007,    0.0098,    0.0100,
+  //  -0.0020,    0.0060,    0.0008,    0.0100,    0.0123;
+
+  P_ << 1,0,0,0,0,
+    0,1,0,0,0,
+    0,0,1,0,0,
+    0,0,0,1,0,
+    0,0,0,0,1;
   
   R_Radar_ = MatrixXd(3,3);
   R_Radar_ <<
@@ -120,9 +128,9 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
       x_ <<  p_x ,p_y,v,phi,0;
       
     }else{
-      x_ << meas_package.raw_measurements_[0],meas_package.raw_measurements_[1],4,0,0;
+      x_ << meas_package.raw_measurements_[0],meas_package.raw_measurements_[1],0,0,0;
     }
-    cout << "x_ = " << x_ <<endl;
+    //cout << "x_ = " << x_ <<endl;
     time_us_ = meas_package.timestamp_;
     is_initialized_ = true;
     return;
@@ -138,12 +146,12 @@ void UKF::ProcessMeasurement(MeasurementPackage meas_package) {
   
   //clac dt
   double dt = (meas_package.timestamp_ - time_us_) / 1000000.0;	//dt - expressed in seconds
-  cout <<"delta t" << dt <<endl;
+  //cout <<"delta t" << dt <<endl;
   time_us_ = meas_package.timestamp_;
   //PREDICT STEP
-  cout<< "PREDICT START"<< endl;
+  //cout<< "PREDICT START"<< endl;
   Prediction(dt);
-  cout<< "PREDICT END"<< endl;
+  //cout<< "PREDICT END"<< endl;
   
   
   if(meas_package.sensor_type_ == MeasurementPackage::RADAR){
@@ -258,10 +266,19 @@ void UKF::UpdateRadar(MeasurementPackage meas_package) {
     Zsig(2,i) = (p_x*v1 + p_y*v2 ) / sqrt(p_x*p_x + p_y*p_y);   //rho_dot
   }
   UpdateCommon(Zsig, meas_package.raw_measurements_);
-
-
+}
+double UKF::CalculateNIS(MatrixXd z_diff,MatrixXd S){
   
-  
+  MatrixXd z_t =z_diff.transpose();
+
+  // cout<< "z_diff" << z_diff <<endl;
+  //cout<< "z_t" << z_t <<endl;
+  //cout<< "S-1" << S.inverse() <<endl;
+
+  VectorXd nis = z_t* S.inverse() * z_diff;
+  //cout << "nis" << nis <<endl;
+  //return nis[0];
+  return nis[0];
 }
 void UKF::UpdateCommon(MatrixXd Zsig,Eigen::VectorXd z){
   int n_z = Zsig.rows();
@@ -280,27 +297,29 @@ void UKF::UpdateCommon(MatrixXd Zsig,Eigen::VectorXd z){
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {  //2n+1 simga points
     //residual
     VectorXd z_diff = Zsig.col(i) - z_pred;
-
     //angle normalization
     while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
     while (z_diff(1)<-M_PI) z_diff(1)+=2.*M_PI;
 
     S = S + weights_(i) * z_diff * z_diff.transpose();
   }
-
+ 
+ 
   //add measurement noise covariance matrix
   //MatrixXd R = MatrixXd(n_z,n_z);
   //R <<    std_radr*std_radr, 0, 0,
   //       0, std_radphi*std_radphi, 0,
   //       0, 0,std_radrd*std_radrd;
+  
   if(n_z >2){
     S = S + R_Radar_;
   }else{
     S = S + R_Ladar_;
   }
-  
 
   
+
+
   MatrixXd Tc = MatrixXd(n_x_,n_z);
   //calculate cross correlation matrix
   Tc.fill(0.0);
@@ -318,18 +337,21 @@ void UKF::UpdateCommon(MatrixXd Zsig,Eigen::VectorXd z){
     while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
     while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
     
-
+  
 
     Tc = Tc + weights_(i) * x_diff * z_diff.transpose();
   }
+  
 
   //Kalman gain K;
   MatrixXd K = Tc * S.inverse();
 
   //residual
   VectorXd z_diff =z  - z_pred;
+  cout << "NIS is " << CalculateNIS(z_diff,S)<< endl;
+  
 
-  cout << "z_diff " << z_diff <<endl;
+  //cout << "z_diff " << z_diff <<endl;
 
   //angle normalization
   while (z_diff(1)> M_PI) z_diff(1)-=2.*M_PI;
@@ -338,9 +360,9 @@ void UKF::UpdateCommon(MatrixXd Zsig,Eigen::VectorXd z){
   //update state mean and covariance matrix
   x_ = x_ + K * z_diff;
   P_ = P_ - K*S*K.transpose();
-  cout<< "Update" << endl;
-  cout << "x_ =" << x_ <<endl;
-  cout << "P_ ="<< P_ <<endl;
+  //cout<< "Update" << endl;
+  //cout << "x_ =" << x_ <<endl;
+  //cout << "P_ ="<< P_ <<endl;
   /**/
 }
 
@@ -391,9 +413,6 @@ void UKF::SigmaPointPrediction(MatrixXd xsig_aug,double delta_t){
   //cout<< "Xsig_Pred_"<<Xsig_pred_ <<endl;
 }
 void UKF::PredictMeanAndConvariance(){
-  
-
- 
   //cout << "weights" <<weights_<< endl;
 
   //predicted state mean
@@ -401,8 +420,8 @@ void UKF::PredictMeanAndConvariance(){
   for (int i = 0; i < 2 * n_aug_ + 1; i++) {
     x_ = x_+ weights_(i) * Xsig_pred_.col(i);
   }
-  cout <<"x_ = "  << x_ << endl;
-  cout <<"Xsig " << Xsig_pred_<<endl;
+  //cout <<"x_ = "  << x_ << endl;
+  //cout <<"Xsig " << Xsig_pred_<<endl;
 
   //predicted state covariance matrix
   P_.fill(0.0);
@@ -410,7 +429,7 @@ void UKF::PredictMeanAndConvariance(){
 
     // state difference
     VectorXd x_diff = Xsig_pred_.col(i) - x_;
-    cout<< "x_diff = " << x_diff(3) <<endl;
+    //cout<< "x_diff = " << x_diff(3) <<endl;
     //angle normalization
     while (x_diff(3)> M_PI) x_diff(3)-=2.*M_PI;
     while (x_diff(3)<-M_PI) x_diff(3)+=2.*M_PI;
@@ -418,6 +437,6 @@ void UKF::PredictMeanAndConvariance(){
     P_ = P_ + weights_(i) * x_diff * x_diff.transpose() ;
   
   }
-  cout <<"P_ = "  << P_ << endl;
+  //cout <<"P_ = "  << P_ << endl;
 }
 
