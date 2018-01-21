@@ -67,6 +67,12 @@ public:
   ///* Sigma point spreading parameter
   double lambda_;
 
+  //Ladar Measurement noise covariance matrix
+  MatrixXd R_Ladar_;
+  //Radar Measurement noist covariance matrix
+  MatrixXd R_Radar_;
+
+
 
   /**
    * Constructor
@@ -102,6 +108,30 @@ public:
    * @param meas_package The measurement at k+1
    */
   void UpdateRadar(MeasurementPackage meas_package);
+
+  /*
+   *generate and augmented sigma points
+   *
+   */
+  MatrixXd SigmaPointsGenerate();
+  /*
+   *Predict sigma points
+   */
+  void SigmaPointPrediction(MatrixXd xsig_aug,double delta_t);
+
+  /*
+   * Predict Mean Convariance
+   */
+  void PredictMeanAndConvariance();
+
+  /*
+   *transform measurement data to sigma points
+   * input : measurement data
+   * output : sigma points
+   */
+  void PredictRadarMeasurement(VectorXd raw_measurements,const MatrixXd & z_sig);
+  void PredictLaserMeasurement(VectorXd raw_measurements,const MatrixXd & z_sig);
+  void UpdateCommon(MatrixXd Zsig, VectorXd raw_measurements);
 };
 
 #endif /* UKF_H */

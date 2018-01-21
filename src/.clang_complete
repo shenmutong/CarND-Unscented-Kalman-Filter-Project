@@ -1,0 +1,3 @@
+-DDEBUG
+-I./src
+-I./src/Eigen
